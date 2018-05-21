@@ -1,6 +1,8 @@
 import pandas as pd
 import datetime
 import csv
+from os import listdir
+from os.path import isfile, isdir, join
 
 def load_target_num(stock_num):
     target_num = []
@@ -8,53 +10,65 @@ def load_target_num(stock_num):
     for i in range(len(df)):
         target_num.append(str(int(df['number'][i])))
 
+    target_num.append(stock_num)
     return target_num
 
 
 def main():
-    df = pd.read_csv('TBrain_Round2_DataSet_20180518/tsharep.csv', encoding = 'utf8')
+    df = pd.read_csv('TBrain_Round2_DataSet_20180518/tsharep.csv', encoding = 'utf8', low_memory=False)
+    df_label = pd.read_csv('TBrain_Round2_DataSet_20180518/tetfp.csv', encoding = 'utf8', low_memory=False)
     workday = pd.read_csv('2018_workday.csv', encoding = 'utf8')
-    stock_num = pd.read_csv('stock_number.csv', encoding = 'utf8')
-    each_feature = ['收盤價(元)', '成交張數(張)']
-    date_title = []
-    data_v1 = {}
-    data_v2 = {}
+    each_feature = ['收盤價(元)', '最高價(元)', '最低價(元)', '成交張數(張)']
+    fname = ['50', '51', '52', '53', '54', '55', '56', '57', '58', '59', '6201', '6203', '6204', '6208', '690', '692', '701', '713']
 
-    fname = '50'
-    target_num = load_target_num(fname)
-    feature_title = []
-    for num in target_num:
-        for fe in each_feature:
-            feature_title.append(num + '_' + fe)
+    for fn in fname:
+        date_title = []
+        data_v1 = {}
+        data_v2 = {}
 
-    for date in workday['date']:
-        data_v1.update({str(date):{}})
-    #data['日期']['代碼'][30.41, 30.53, 30.18, 30.45, 6374]
-    input()
-    for row in range(len(df)):
-        print(str(row) + '/' + str(len(df)))
-        if str(df['日期'][row]) in data_v1.keys():
-            data_v1[str(df['日期'][row])].update({str(df['代碼'][row]):[]})
-            data_v1[str(df['日期'][row])][str(df['代碼'][row])].append(float(str(df['收盤價(元)'][row]).replace(',','')))
-            data_v1[str(df['日期'][row])][str(df['代碼'][row])].append(int(df['成交張數(張)'][row].replace(',','')))
-
-
-
-    for date in workday['date']:
-        data_v2.update({str(date):[]})
+        target_num = load_target_num(fn)
+        feature_title = []
         for num in target_num:
-            data_v2[str(date)].extend(data_v1[str(date)][num])
-
-    with open(fname + '_feature.csv', 'w', newline='', encoding='utf-8') as fout:
-        wr = csv.writer(fout)
-        wr.writerow(feature_title)
+            for fe in each_feature:
+                feature_title.append(num + '_' + fe)
 
         for date in workday['date']:
-            value = []
-            for fe in data_v2[str(date)]:
-                value.append(fe)
+            data_v1.update({str(date):{}})
 
-            wr.writerow(value)
+        for row in range(len(df)):
+            print(str(row) + '/' + str(len(df)))
+            if str(df['日期'][row]) in data_v1.keys():
+                data_v1[str(df['日期'][row])].update({str(df['代碼'][row]):[]})
+                data_v1[str(df['日期'][row])][str(df['代碼'][row])].append(float(str(df['收盤價(元)'][row]).replace(',','')))
+                data_v1[str(df['日期'][row])][str(df['代碼'][row])].append(float(str(df['最高價(元)'][row]).replace(',','')))
+                data_v1[str(df['日期'][row])][str(df['代碼'][row])].append(float(str(df['最低價(元)'][row]).replace(',','')))
+                data_v1[str(df['日期'][row])][str(df['代碼'][row])].append(int(df['成交張數(張)'][row].replace(',','')))
+
+        for row in range(len(df_label)):
+            if int(df_label['代碼'][row]) == int(fn):
+                print(str(row) + '/' + str(len(df_label)))
+                if str(df_label['日期'][row]) in data_v1.keys():
+                    data_v1[str(df_label['日期'][row])].update({str(df_label['代碼'][row]):[]})
+                    data_v1[str(df_label['日期'][row])][str(df_label['代碼'][row])].append(float(str(df_label['收盤價(元)'][row]).replace(',','')))
+                    data_v1[str(df_label['日期'][row])][str(df_label['代碼'][row])].append(float(str(df_label['最高價(元)'][row]).replace(',','')))
+                    data_v1[str(df_label['日期'][row])][str(df_label['代碼'][row])].append(float(str(df_label['最低價(元)'][row]).replace(',','')))
+                    data_v1[str(df_label['日期'][row])][str(df_label['代碼'][row])].append(int(df_label['成交張數(張)'][row].replace(',','')))
+
+        for date in workday['date']:
+            data_v2.update({str(date):[]})
+            for num in target_num:
+                data_v2[str(date)].extend(data_v1[str(date)][num])
+
+        with open(fn + '_feature.csv', 'w', newline='', encoding='utf-8') as fout:
+            wr = csv.writer(fout)
+            wr.writerow(feature_title)
+
+            for date in workday['date']:
+                value = []
+                for fe in data_v2[str(date)]:
+                    value.append(fe)
+
+                wr.writerow(value)
 
 
 if __name__ == '__main__':
