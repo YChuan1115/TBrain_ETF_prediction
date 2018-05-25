@@ -1,104 +1,146 @@
 import tensorflow as tf
 import pandas as pd
 import numpy as np
+import math
 
-def get_batch_feature():
-    df = pd.read_csv('stock_feature.csv')
+def get_batch_feature(fn):
+    df = pd.read_csv('stock_feature/'+ fn + '_feature.csv')
     title = list(df.columns.values)
+    feature_num = len(title)
     data = []
     for row in range(len(df)):
         tmp_list = []
         for item in title:
             tmp_list.append(df[item][row])
         data.append(tmp_list)
-    return data
+    return data, feature_num
 
-def get_batch_label():
-    #title = ['50_收盤價(元)', '51_收盤價(元)', '52_收盤價(元)', '53_收盤價(元)', '54_收盤價(元)', '55_收盤價(元)', '56_收盤價(元)', '57_收盤價(元)', '58_收盤價(元)', '59_收盤價(元)', '6201_收盤價(元)', '6203_收盤價(元)', '6204_收盤價(元)', '6208_收盤價(元)', '690_收盤價(元)', '692_收盤價(元)', '701_收盤價(元)', '713_收盤價(元)']
-    title = ['50_收盤價(元)']
-    df = pd.read_csv('stock_feature.csv')
-    data = []
-    for row in range(len(df)):
-        tmp_list = []
+def get_batch_label(fn):
+    title = [fn + '_收盤價(元)']
+    df_value = pd.read_csv('stock_label/' + fn + '_label_value.csv')
+    df_ratio = pd.read_csv('stock_label/' + fn + '_label_ratio.csv')
+    value_label = []
+    ratio_label = []
+    for row in range(len(df_value)):
+        tmp_list_value = []
+        tmp_list_ratio = []
         for item in title:
-            tmp_list.append(df[item][row])
-        data.append(tmp_list)
-    return data
+            tmp_list_value.append(df_value[item][row])
+            tmp_list_ratio.append(df_ratio[item][row])
+        value_label.append(tmp_list_value)
+        ratio_label.append(tmp_list_ratio)
 
-def RNN(X, weight, biases):
-    n_inputs = 36
-    max_time = 7
-    lstm_size = 2
+    return value_label, ratio_label
+
+def get_feature(data_feature):
+    tr_feature = []
+    te_feature = []
+    for i in range(0, len(data_feature)-14, 1):
+        tmp_tr = []
+        for weekd in range(i, i+10, 1):
+            tmp_tr.extend(data_feature[weekd])
+        tr_feature.append(tmp_tr)
+
+    for i in range(len(data_feature)-10, len(data_feature), 1):
+        te_feature.extend(data_feature[i])
+
+    return tr_feature, [te_feature]
+
+def get_tr_label(data_label_value):
+    tr_label = []
+    for i in range(10, len(data_label_value)-4, 1):
+        tmp_label = []
+        for weekd in range(i, i+5, 1):
+            tmp_label.extend(data_label_value[weekd])
+        tr_label.append(tmp_label)
+
+    return tr_label
+
+def RNN(X, weight, biases, feature_num):
+    n_inputs = feature_num
+    max_time = 10
+    lstm_size = 30
     inputs = tf.reshape(X, [-1, max_time, n_inputs]) #[batch_size, max_time, n_inputs]
-    lstm_cell = tf.contrib.rnn.core_rnn_cell.BasicLSTMCell(lstm_size, forget_bias=1.0, state_is_tuple=True)
-    #final_state[0] is cell state ~ value in memory cell
-    #final_state[1] is hidden_state ~ value of h'(memory cell)
+    lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(lstm_size, forget_bias=1.0, state_is_tuple=True)
     output, final_state = tf.nn.dynamic_rnn(lstm_cell, inputs, dtype = tf.float32)
-    results = tf.nn.softmax(tf.matmul(final_state[1], weight) + biases)
+    results = tf.matmul(final_state[1], weight) + biases
+
     return results
 
+def ratio2value(y_prediction, day_l5):
+    result = []
+    for i in range(5):
+        if i == 0:
+            result.append(float('%.2f' % ((y_prediction[0][i] * day_l5) + day_l5)))
+        else:
+            result.append(float('%.2f' % ((y_prediction[0][i] * result[i-1]) + result[i-1])))
+
+    return result
+
 def main():
-    data_feature = get_batch_feature()
-    data_label = get_batch_label()
+    fname = '50'
+    data_feature, feature_num = get_batch_feature(fname)
+    data_label_value, data_label_ratio = get_batch_label(fname)
+    tr_feature, te_feature = get_feature(data_feature)
+    tr_label = get_tr_label(data_label_ratio)
+    lastfri_value = data_label_value[len(data_label_value)-1][0]
+
+
 
     with tf.name_scope('input'):
-        x = tf.placeholder(tf.float32, [7, 36], name = 'x_input')
-        y = tf.placeholder(tf.float32, [1, 1], name = 'y_input')
+        x = tf.placeholder(tf.float32, [None, 10*feature_num], name = 'x_input')
+        y = tf.placeholder(tf.float32, [None, 5], name = 'y_input')
 
     with tf.name_scope('Weight'):
-        weights = tf.Variable(tf.truncated_normal([2, 1], stddev = 0.1))
+        weights = tf.Variable(tf.truncated_normal([30, 5], stddev = 0.1))
 
     with tf.name_scope('bias'):
         biases = tf.Variable(tf.constant(0.1, shape = [1]))
 
     with tf.name_scope('Layer'):
-        y_prediction = RNN(x, weights, biases)
+        y_prediction = RNN(x, weights, biases, feature_num)
 
     with tf.name_scope('avg_cost'):
-        mse = tf.losses.mean_squared_error(y_prediction, y)
-        tf.summary.scalar('avg_cost', mse)
+        #score = tf.divide(tf.subtract(tf.abs(y), tf.abs(tf.subtract(y_prediction, y))), tf.abs(y))
+        rmse = tf.sqrt(tf.reduce_mean(tf.square(tf.subtract(y, y_prediction))))
+        tf.summary.scalar('avg_cost', rmse)
 
     with tf.name_scope('train'):
-        train_step = tf.train.AdamOptimizer(0.2).minimize(mse)
+        train_step = tf.train.AdamOptimizer(0.0001).minimize(rmse)
 
     with tf.name_scope('accuracy'):
-        #accuracy =  tf.subtract(y, tf.divide(tf.abs(tf.subtract(y_prediction, y)), y))*0.5
-        accuracy = y_prediction
+        #accuracy =  tf.matmul(tf.divide(tf.subtract(y, tf.abs(tf.subtract(y_prediction, y))), y))
+        accuracy  = y_prediction
     merged = tf.summary.merge_all()
 
 
-    with tf.Session() as sess:
+    with tf.Session(config=tf.ConfigProto(log_device_placement = True, allow_soft_placement = True)) as sess:
         sess.run(tf.global_variables_initializer())
         train_writer = tf.summary.FileWriter('logs/train', sess.graph)
         test_writer = tf.summary.FileWriter('logs/test', sess.graph)
-        test_data = []
-        test_label = []
+        batch_size = 50
+        batch_num = len(tr_feature) // batch_size
 
-        for batch_i in range(len(data_feature)-8, len(data_feature)-1, 1):
-            test_data.append(data_feature[batch_i])
-            if batch_i == len(data_feature)-2:
-                test_label = data_label[batch_i+1]
-        test_label = np.asarray([test_label])
+        for epoch in range(1000):
+            for batch_i in range(batch_num):
+                try:
+                    batch_xs = tr_feature[batch_i*batch_size: (batch_i+1)*batch_size]
+                    batch_ys = tr_label[batch_i*batch_size: (batch_i+1)*batch_size]
+                except:
+                    batch_xs = tr_feature[batch_i*batch_size:]
+                    batch_ys = tr_label[batch_i*batch_size:]
 
-        for epoch in range(50):
-            for batch_i in range(0, len(data_feature)-8, 1):
-                batch_xs = []
-                batch_ys = []
-                for weekd in range(batch_i, batch_i+7, 1):
-                    batch_xs.append(data_feature[weekd])
-                    if weekd == batch_i + 6:
-                        batch_ys = data_label[weekd+1]
-                batch_xs = np.asarray(batch_xs)
-                batch_ys = np.asarray([batch_ys])
                 sess.run(train_step, feed_dict={x:batch_xs, y:batch_ys})
-                testing_acc, test_res = sess.run([accuracy, merged], feed_dict={x:batch_xs, y:batch_ys})
-                print('testing acc: ' + str(testing_acc))
+
+
 
             #testing_acc, test_res = sess.run([accuracy, merged], feed_dict={x:test_data, y:test_label})
-            test_writer.add_summary(test_res, epoch)
-            print('testing acc: ' + str(testing_acc))
+            if epoch % 50 == 0 or epoch == 999:
+                predictions = ratio2value(y_prediction.eval(feed_dict = {x:te_feature}), lastfri_value)
+                print('Epoch: ' + str(epoch) + ' prediction: ')
+                print(predictions)
+                print('')
 
 
 if __name__ == '__main__':
-    tf.reset_default_graph()
     main()
