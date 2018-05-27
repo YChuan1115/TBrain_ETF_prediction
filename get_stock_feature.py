@@ -16,13 +16,29 @@ def main():
     df = pd.read_csv('TBrain_Round2_DataSet_20180518/tsharep.csv', encoding = 'utf8', low_memory=False)
     df_label = pd.read_csv('TBrain_Round2_DataSet_20180518/tetfp.csv', encoding = 'utf8', low_memory=False)
     each_feature = ['收盤價(元)', '最高價(元)', '最低價(元)', '成交張數(張)']
-    #fname = ['50', '51', '52', '53', '54', '55', '56', '57', '58', '59', '6201', '6203', '6204', '6208', '690', '692', '701', '713']
-    fname = ['701']
+    fname = ['50', '51', '52', '53', '54', '55', '56', '57', '58', '59', '6201', '6203', '6204', '6208', '690', '692', '701', '713']
+    #fname = ['701']
+    workday = pd.read_csv('stock_workday/' + '50' + '_workday.csv')
+    data_main = {}
+    for date in workday['date']:
+        data_main.update({str(date):{}})
+    print('running all stock data')
+    for row in range(len(df)):
+        print(str(row) + '/' + str(len(df)))
+        if str(df['日期'][row]) in data_main.keys():
+            data_main[str(df['日期'][row])].update({str(df['代碼'][row]):[]})
+            data_main[str(df['日期'][row])][str(df['代碼'][row])].append(float(str(df['收盤價(元)'][row]).replace(',','')))
+            data_main[str(df['日期'][row])][str(df['代碼'][row])].append(float(str(df['最高價(元)'][row]).replace(',','')))
+            data_main[str(df['日期'][row])][str(df['代碼'][row])].append(float(str(df['最低價(元)'][row]).replace(',','')))
+            data_main[str(df['日期'][row])][str(df['代碼'][row])].append(int(df['成交張數(張)'][row].replace(',','')))
+
+
+
 
     for fn in fname:
         date_title = []
         workday = pd.read_csv('stock_workday/' + fn + '_workday.csv')
-        data_v1 = {}
+        data_v1 = data_main
         data_v2 = {}
 
         target_num = load_target_num(fn)
@@ -31,19 +47,7 @@ def main():
             for fe in each_feature:
                 feature_title.append(num + '_' + fe)
 
-        for date in workday['date']:
-            data_v1.update({str(date):{}})
-        print('running all stock data')
-        for row in range(len(df)):
-            print(str(row) + '/' + str(len(df)))
-            if str(df['日期'][row]) in data_v1.keys():
-                data_v1[str(df['日期'][row])].update({str(df['代碼'][row]):[]})
-                data_v1[str(df['日期'][row])][str(df['代碼'][row])].append(float(str(df['收盤價(元)'][row]).replace(',','')))
-                data_v1[str(df['日期'][row])][str(df['代碼'][row])].append(float(str(df['最高價(元)'][row]).replace(',','')))
-                data_v1[str(df['日期'][row])][str(df['代碼'][row])].append(float(str(df['最低價(元)'][row]).replace(',','')))
-                data_v1[str(df['日期'][row])][str(df['代碼'][row])].append(int(df['成交張數(張)'][row].replace(',','')))
-
-        print('running' + fn + 'stock data')
+        print('running ' + fn + ' stock data')
 
         for row in range(len(df_label)):
             if int(df_label['代碼'][row]) == int(fn):
