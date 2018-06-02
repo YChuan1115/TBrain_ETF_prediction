@@ -106,8 +106,8 @@ def ratio2value(y_prediction, te_label):
 
 
 def main():
-    fname = '713'
-    lstm_size = 6
+    fname = '6208'
+    lstm_size = 15
 
 
     data_feature, feature_num = get_batch_feature(fname)

@@ -33,19 +33,14 @@ def get_batch_label(fn):
 
     return value_label, ratio_label
 
-def get_feature(data_feature):
-    tr_feature = []
+def get_feature(data_feature, lastfri_date):
     te_feature = []
-    for i in range(0, len(data_feature)-14, 1):
-        tmp_tr = []
-        for weekd in range(i, i+10, 1):
-            tmp_tr.extend(data_feature[weekd])
-        tr_feature.append(tmp_tr)
+    tmp_tr = []
+    for i in range(lastfri_date-9, lastfri_date+1, 1):
+        tmp_tr.extend(data_feature[i])
+    te_feature.append(tmp_tr)
 
-    for i in range(len(data_feature)-10, len(data_feature), 1):
-        te_feature.extend(data_feature[i])
-
-    return tr_feature, [te_feature]
+    return te_feature
 
 def RNN(X, weight, biases, feature_num, lstm_size):
     n_inputs = feature_num
@@ -64,7 +59,7 @@ def ratio2value(y_prediction, te_label):
     score = 0
 
     for i in range(5):
-        sign_pred = y_prediction[0].index(max(y_prediction[0][i:(i+1)*3]))
+        sign_pred = y_prediction[0][i*3:(i+1)*3].index(max(y_prediction[0][i*3:(i+1)*3]))
         if sign_pred == 1:
             result.append(-1)
 
@@ -73,7 +68,7 @@ def ratio2value(y_prediction, te_label):
 
         else:
             result.append(1)
-
+    print(result)
     return result
 
 def date2index(fridate, fn):
@@ -86,7 +81,8 @@ def date2index(fridate, fn):
 
 def main():
     etf_id = ['50', '51', '53', '54', '56', '57', '58', '59', '6201', '6203', '6204', '6208', '690', '692', '701', '713']
-    lstm_size_list = [11, 15, 10, 10, 10, 7, 10, 17 ,10, 8, 8, 8, 17 ,17 ,12, 6]
+    lstm_size_list = [11, 15, 10, 10, 10, 7, 10, 17 ,10, 8, 8, 15, 17 ,17 ,12, 6]
+
     pred_date_list = ['20180112',
                      '20180119',
                      '20180126',
@@ -117,7 +113,7 @@ def main():
             lastfri_date = date2index(pred_date, etf_id[fn])
             data_feature, feature_num = get_batch_feature(etf_id[fn])
             data_label_value, data_label_ratio = get_batch_label(etf_id[fn])
-            tr_feature, te_feature = get_feature(data_feature)
+            te_feature = get_feature(data_feature, lastfri_date)
 
             lastfri_value = data_label_value[lastfri_date][0]
             te_label_value = data_label_value[lastfri_date-10:lastfri_date-1]
@@ -168,7 +164,6 @@ def main():
                         if row == etf_id.index(etf_id[fn]):
                             value.append(etf_id[fn])
                             for column in range(5):
-                                print(predictions)
                                 value.append(predictions[column])
                                 value.append(ori_csv[title[(2*(column+1))]][row])
 
