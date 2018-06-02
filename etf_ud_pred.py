@@ -17,12 +17,12 @@ def get_batch_feature(fn):
 
 def get_batch_label(fn):
     title = [fn + '_收盤價(元)']
-    df_value = pd.read_csv('stock_label/' + fn + '_label_ud.csv')
+    df_value = pd.read_csv('stock_label/' + fn + '_label_ud.csv', encoding='utf-8')
     ud_label = []
     for row in range(len(df_value)):
-        if df_value[fn][row] == 1:
+        if df_value[fn + '_收盤價(元)'][row] == 1:
             ud_label.append([1, 0, 0])
-        elif df_value[fn][row] == -1:
+        elif df_value[fn + '_收盤價(元)'][row] == -1:
             ud_label.append([0, 1, 0])
         else:
             ud_label.append([0, 0, 1])
@@ -59,32 +59,33 @@ def RNN(X, weight, biases, feature_num, lstm_size):
     inputs = tf.reshape(X, [-1, max_time, n_inputs]) #[batch_size, max_time, n_inputs]
     lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(lstm_size, forget_bias=1.0, state_is_tuple=True)
     output, final_state = tf.nn.dynamic_rnn(lstm_cell, inputs, dtype = tf.float32)
-    results = tf.nn.softmax(tf.matmul(final_state[1], weight) + biases)
+    results = tf.nn.relu(tf.matmul(final_state[1], weight) + biases)
 
     return results
 
 def ratio2value(y_prediction, te_label):
     result = []
     result_label = []
+    y_prediction = y_prediction.tolist()
     score = 0
 
     for i in range(5):
-        sign = y_prediction[0][i].index(max(y_prediction[0][i]))
-        if sign == 2:
+        sign_pred = y_prediction[0][i*3:(i+1)*3].index(max(y_prediction[0][i*3:(i+1)*3]))
+        if sign_pred == 1:
             result.append(-1)
 
-        elif sign == 3:
+        elif sign_pred == 2:
             result.append(0)
 
         else:
             result.append(1)
 
     for i in range(5):
-        sign = te_label[i][0].index(1)
-        if sign == 2:
+        sign_true = te_label[i].index(1)
+        if sign_true == 1:
             result_label.append(-1)
 
-        elif sign == 3:
+        elif sign_true == 2:
             result_label.append(0)
 
         else:
@@ -97,13 +98,16 @@ def ratio2value(y_prediction, te_label):
         tmp_score = tmp_score * ((i+1)*0.05+0.05)
         score += tmp_score
 
+    print('true:')
+    print(result_label)
+    print('pred:')
     print(result)
     return score
 
 
 def main():
-    fname = '6203'
-    lstm_size = 8
+    fname = '713'
+    lstm_size = 6
 
 
     data_feature, feature_num = get_batch_feature(fname)
@@ -111,16 +115,16 @@ def main():
     tr_feature, te_feature = get_feature(data_feature)
     tr_label = get_tr_label(data_label_ud)
 
-    te_label_value = data_label_ud[len(data_label_value)-6:len(data_label_value)]
+    te_label_value = data_label_ud[len(data_label_ud)-5:len(data_label_ud)]
 
 
 
     with tf.name_scope('input'):
         x = tf.placeholder(tf.float32, [None, 10*feature_num], name = 'x_input')
-        y = tf.placeholder(tf.float32, [None, 5, 3], name = 'y_input')
+        y = tf.placeholder(tf.float32, [None, 15], name = 'y_input')
 
     with tf.name_scope('Weight'):
-        weights = tf.Variable(tf.truncated_normal([lstm_size, 5, 3], stddev = 0.1))
+        weights = tf.Variable(tf.truncated_normal([lstm_size, 15], stddev = 0.1))
 
     with tf.name_scope('bias'):
         biases = tf.Variable(tf.constant(0.1, shape = [1]))
@@ -139,7 +143,7 @@ def main():
         #accuracy =  tf.matmul(tf.divide(tf.subtract(y, tf.abs(tf.subtract(y_prediction, y))), y))
         accuracy  = y_prediction
     merged = tf.summary.merge_all()
-    #saver = tf.train.Saver()
+    saver = tf.train.Saver()
 
 
     with tf.Session(config=tf.ConfigProto(log_device_placement = True, allow_soft_placement = True)) as sess:
@@ -149,7 +153,7 @@ def main():
         batch_size = 50
         batch_num = len(tr_feature) // batch_size
 
-        for epoch in range(200):
+        for epoch in range(500):
             for batch_i in range(batch_num):
                 try:
                     batch_xs = tr_feature[batch_i*batch_size: (batch_i+1)*batch_size]
@@ -163,13 +167,13 @@ def main():
 
 
             #testing_acc, test_res = sess.run([accuracy, merged], feed_dict={x:test_data, y:test_label})
-            if epoch % 50 == 0 or epoch == 1499:
-                predictions = ratio2value(y_prediction.eval(feed_dict = {x:te_feature}), lastfri_value, te_label_value)
+            if epoch % 50 == 0 or epoch == 499:
+                predictions = ratio2value(y_prediction.eval(feed_dict = {x:te_feature}), te_label_value)
                 print('Epoch: ' + str(epoch) + ' score: ')
                 print(predictions)
                 print('')
 
-        #saver.save(sess, 'etf_net/'+ fname + '_net/' + fname + '.ckpt')
+        saver.save(sess, 'etf_ud_net/'+ fname + '_net/' + fname + '.ckpt')
 
 
 

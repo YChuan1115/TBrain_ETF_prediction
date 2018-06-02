@@ -57,30 +57,24 @@ def RNN(X, weight, biases, feature_num, lstm_size):
 
     return results
 
-def ratio2value(y_prediction, day_l5, te_label):
+def ratio2value(y_prediction, te_label):
     result = []
+    result_label = []
+    y_prediction = y_prediction.tolist()
     score = 0
-    csv_result = []
 
     for i in range(5):
-        if i == 0:
-            result.append(float('%.2f' % ((y_prediction[0][i] * day_l5) + day_l5)))
+        sign_pred = y_prediction[0].index(max(y_prediction[0][i:(i+1)*3]))
+        if sign_pred == 1:
+            result.append(-1)
+
+        elif sign_pred == 2:
+            result.append(0)
+
         else:
-            result.append(float('%.2f' % ((y_prediction[0][i] * result[i-1]) + result[i-1])))
+            result.append(1)
 
-    for i in range(len(result)):
-        tmp_score = 0
-        tmp_score = ((te_label[i+1][0] - abs(result[i] - te_label[i+1][0])) / te_label[i+1][0]) * 0.5
-        if np.sign([te_label[i+1][0] - te_label[i][0]]) == np.sign([y_prediction[0][i]]):
-            tmp_score += 0.5
-        tmp_score = tmp_score * ((i+1)*0.05+0.05)
-        score += tmp_score
-
-    for i in range(len(result)):
-        csv_result.append(int(np.sign([y_prediction[0][i]])))
-        csv_result.append(result[i])
-
-    return csv_result
+    return result
 
 def date2index(fridate, fn):
     tmp = []
@@ -91,8 +85,8 @@ def date2index(fridate, fn):
     return date_index
 
 def main():
-    etf_id = ['50', '51', '52', '53', '54', '55', '56', '57', '58', '59', '6201', '6203', '6204', '6208', '690', '692', '701', '713']
-    lstm_size_list = [11, 4, 2, 25, 8, 26, 3, 7, 6, 4, 2, 8, 8, 8, 19, 10, 7, 6]
+    etf_id = ['50', '51', '53', '54', '56', '57', '58', '59', '6201', '6203', '6204', '6208', '690', '692', '701', '713']
+    lstm_size_list = [11, 15, 10, 10, 10, 7, 10, 17 ,10, 8, 8, 8, 17 ,17 ,12, 6]
     pred_date_list = ['20180112',
                      '20180119',
                      '20180126',
@@ -132,10 +126,10 @@ def main():
 
             with tf.name_scope('input'):
                 x = tf.placeholder(tf.float32, [None, 10*feature_num], name = 'x_input')
-                y = tf.placeholder(tf.float32, [None, 5], name = 'y_input')
+                y = tf.placeholder(tf.float32, [None, 15], name = 'y_input')
 
             with tf.name_scope('Weight'):
-                weights = tf.Variable(tf.truncated_normal([lstm_size, 5], stddev = 0.1))
+                weights = tf.Variable(tf.truncated_normal([lstm_size, 15], stddev = 0.1))
 
             with tf.name_scope('bias'):
                 biases = tf.Variable(tf.constant(0.1, shape = [1]))
@@ -162,10 +156,10 @@ def main():
             with tf.Session() as sess:
                 sess.run(tf.global_variables_initializer())
                 saver.restore(sess, 'etf_ud_net/'+ etf_id[fn] + '_net/' + etf_id[fn] + '.ckpt')
-                predictions = ratio2value(y_prediction.eval(feed_dict = {x:te_feature}), lastfri_value, te_label_value)
-                ori_csv = pd.read_csv('pred_result/result_' + pred_date + '.csv')
+                predictions = ratio2value(y_prediction.eval(feed_dict = {x:te_feature}), te_label_value)
+                ori_csv = pd.read_csv('pred_result_2/result_' + pred_date + '.csv')
                 title = list(ori_csv.columns.values)
-                with open('pred_result/result_' + pred_date + '.csv', 'w', newline='') as fout:
+                with open('pred_result_2/result_' + pred_date + '.csv', 'w', newline='') as fout:
                     wr = csv.writer(fout)
                     wr.writerow(title)
 
@@ -173,7 +167,10 @@ def main():
                         value = []
                         if row == etf_id.index(etf_id[fn]):
                             value.append(etf_id[fn])
-                            value.extend(predictions)
+                            for column in range(5):
+                                print(predictions)
+                                value.append(predictions[column])
+                                value.append(ori_csv[title[(2*(column+1))]][row])
 
                         else:
                             for item in title:
