@@ -64,9 +64,9 @@ def ratio2value(y_prediction, day_l5, te_label):
 
     for i in range(5):
         if i == 0:
-            result.append(float('%.2f' % ((y_prediction[0][i] * day_l5) + day_l5)))
+            result.append(float((y_prediction[0][i] * day_l5) + day_l5))
         else:
-            result.append(float('%.2f' % ((y_prediction[0][i] * result[i-1]) + result[i-1])))
+            result.append(float((y_prediction[0][i] * result[i-1]) + result[i-1]))
 
     for i in range(len(result)):
         tmp_score = 0
@@ -86,77 +86,102 @@ def date2index(fridate, fn):
     tmp = []
     workday = pd.read_csv('stock_workday/' + fn + '_workday.csv')
     tmp.extend(workday['date'])
-    date_index = tmp.index(20130102)
+    date_index = tmp.index(int(fridate))
 
     return date_index
 
 def main():
     etf_id = ['50', '51', '52', '53', '54', '55', '56', '57', '58', '59', '6201', '6203', '6204', '6208', '690', '692', '701', '713']
-    fn = '50'
-    pred_date = '20180518'
-    lstm_size = 11
+    lstm_size_list = [11, 4, 2, 25, 8, 26, 3, 7, 6, 4, 2, 8, 8, 8, 19, 10, 7, 6]
+    pred_date_list = ['20180112',
+                     '20180119',
+                     '20180126',
+                     '20180202',
+                     '20180209',
+                     '20180226',
+                     '20180306',
+                     '20180313',
+                     '20180320',
+                     '20180327',
+                     '20180402',
+                     '20180412',
+                     '20180419',
+                     '20180426',
+                     '20180504',
+                     '20180511',
+                     '20180518',
+                     '20180525',
+                     '20180601']
+    #pred_date = '20180518'
 
-    lastfri_date = date2index(pred_date, fn)
-    data_feature, feature_num = get_batch_feature(fn)
-    data_label_value, data_label_ratio = get_batch_label(fn)
-    tr_feature, te_feature = get_feature(data_feature)
+    for fn in range(len(etf_id)):
 
-    lastfri_value = data_label_value[lastfri_date][0]
-    te_label_value = data_label_value[lastfri_date-10:lastfri_date-1]
+        for pred_date in pred_date_list:
+            print(etf_id[fn] + ' ' + pred_date)
+            lstm_size = lstm_size_list[fn]
+            tf.reset_default_graph()
+            lastfri_date = date2index(pred_date, etf_id[fn])
+            data_feature, feature_num = get_batch_feature(etf_id[fn])
+            data_label_value, data_label_ratio = get_batch_label(etf_id[fn])
+            tr_feature, te_feature = get_feature(data_feature)
+
+            lastfri_value = data_label_value[lastfri_date][0]
+            te_label_value = data_label_value[lastfri_date-10:lastfri_date-1]
 
 
 
-    with tf.name_scope('input'):
-        x = tf.placeholder(tf.float32, [None, 10*feature_num], name = 'x_input')
-        y = tf.placeholder(tf.float32, [None, 5], name = 'y_input')
+            with tf.name_scope('input'):
+                x = tf.placeholder(tf.float32, [None, 10*feature_num], name = 'x_input')
+                y = tf.placeholder(tf.float32, [None, 5], name = 'y_input')
 
-    with tf.name_scope('Weight'):
-        weights = tf.Variable(tf.truncated_normal([lstm_size, 5], stddev = 0.1))
+            with tf.name_scope('Weight'):
+                weights = tf.Variable(tf.truncated_normal([lstm_size, 5], stddev = 0.1))
 
-    with tf.name_scope('bias'):
-        biases = tf.Variable(tf.constant(0.1, shape = [1]))
+            with tf.name_scope('bias'):
+                biases = tf.Variable(tf.constant(0.1, shape = [1]))
 
-    with tf.name_scope('Layer'):
-        y_prediction = RNN(x, weights, biases, feature_num, lstm_size)
+            with tf.name_scope('Layer'):
+                y_prediction = RNN(x, weights, biases, feature_num, lstm_size)
 
-    with tf.name_scope('avg_cost'):
-        #score = tf.divide(tf.subtract(tf.abs(y), tf.abs(tf.subtract(y_prediction, y))), tf.abs(y))
-        rmse = tf.sqrt(tf.reduce_mean(tf.square(tf.subtract(y, y_prediction))))
-        tf.summary.scalar('avg_cost', rmse)
+            with tf.name_scope('avg_cost'):
+                #score = tf.divide(tf.subtract(tf.abs(y), tf.abs(tf.subtract(y_prediction, y))), tf.abs(y))
+                rmse = tf.sqrt(tf.reduce_mean(tf.square(tf.subtract(y, y_prediction))))
+                tf.summary.scalar('avg_cost', rmse)
 
-    with tf.name_scope('train'):
-        train_step = tf.train.AdamOptimizer(0.0001).minimize(rmse)
+            with tf.name_scope('train'):
+                train_step = tf.train.AdamOptimizer(0.0001).minimize(rmse)
 
-    with tf.name_scope('accuracy'):
-        #accuracy =  tf.matmul(tf.divide(tf.subtract(y, tf.abs(tf.subtract(y_prediction, y))), y))
-        accuracy  = y_prediction
+            with tf.name_scope('accuracy'):
+                #accuracy =  tf.matmul(tf.divide(tf.subtract(y, tf.abs(tf.subtract(y_prediction, y))), y))
+                accuracy  = y_prediction
 
-    merged = tf.summary.merge_all()
-    saver = tf.train.Saver()
+            merged = tf.summary.merge_all()
+            saver = tf.train.Saver()
 
-    with tf.Session() as sess:
-        sess.run(tf.global_variables_initializer())
-        saver.restore(sess, 'etf_net/'+ fn + '_net/' + fn + '.ckpt')
-        #saver.restore(sess, 'etf_net/' + fn + '.ckpt')
-        predictions = ratio2value(y_prediction.eval(feed_dict = {x:te_feature}), lastfri_value, te_label_value)
-        ori_csv = pd.read_csv('pred_result/result_' + pred_date + '.csv')
-        title = list(ori_csv.columns.values)
-        with open('pred_result/result_' + pred_date + '.csv', 'w', newline='') as fout:
-            wr = csv.writer(fout)
-            wr.writerow(title)
 
-            for row in range(len(ori_csv)):
-                value = []
-                if row == etf_id.index(fn):
-                    value.append(fn)
-                    value.extend(predictions)
+            with tf.Session() as sess:
+                sess.run(tf.global_variables_initializer())
+                saver.restore(sess, 'etf_value_net/'+ etf_id[fn] + '_net/' + etf_id[fn] + '.ckpt')
+                predictions = ratio2value(y_prediction.eval(feed_dict = {x:te_feature}), lastfri_value, te_label_value)
+                ori_csv = pd.read_csv('pred_result/result_' + pred_date + '.csv')
+                title = list(ori_csv.columns.values)
+                with open('pred_result/result_' + pred_date + '.csv', 'w', newline='') as fout:
+                    wr = csv.writer(fout)
+                    wr.writerow(title)
 
-                else:
-                    for item in title:
-                        value.append(ori_csv[item][row])
+                    for row in range(len(ori_csv)):
+                        value = []
+                        if row == etf_id.index(etf_id[fn]):
+                            value.append(etf_id[fn])
+                            value.extend(predictions)
 
-                wr.writerow(value)
+                        else:
+                            for item in title:
+                                value.append(ori_csv[item][row])
+
+                        wr.writerow(value)
 
 
 if __name__ == '__main__':
+
     main()

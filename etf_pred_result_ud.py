@@ -161,7 +161,7 @@ def main():
 
                     for row in range(len(ori_csv)):
                         value = []
-                        if row == etf_id.index(etf_id[fn]):
+                        if int(ori_csv['ETFid'][row]) == int(etf_id[fn]):
                             value.append(etf_id[fn])
                             for column in range(5):
                                 value.append(predictions[column])
