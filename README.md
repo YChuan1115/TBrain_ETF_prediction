@@ -1,5 +1,4 @@
-#ETF_prediction
-
+# [趨勢科技 TBrain 台灣 ETF 價格預測競賽](https://tbrain.trendmicro.com.tw/Competitions/Details/2)
 
 weekly data update preprocessing step:
 1. get_workday.py
@@ -9,3 +8,4 @@ weekly data update preprocessing step:
 5. each stock fine tunning in "etf_lstm_model" then save the model to "etf_net"
 6. etf_pred_result.py
 
+Competitions rank: 7/487
